@@ -1,7 +1,11 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework.relations import SlugRelatedField
+from rest_framework.validators import UniqueTogetherValidator
 
-from posts.models import Group, Post, Comment, Follow, User
+from posts.models import Group, Post, Comment, Follow
+
+User = get_user_model()
 
 
 class GroupSerializer(serializers.ModelSerializer):
@@ -31,42 +35,28 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class FollowSerializer(serializers.ModelSerializer):
     user = serializers.SlugRelatedField(
-        read_only=True, slug_field='username')
+        read_only=True, slug_field='username',
+        default=serializers.CurrentUserDefault())
     following = SlugRelatedField(
-        read_only=True, slug_field='username')
+        queryset=User.objects.all(),
+        slug_field='username')
 
     class Meta:
         model = Follow
         fields = ('user', 'following')
+        validators = [
+            UniqueTogetherValidator(
+                queryset=Follow.objects.all(),
+                fields=('user', 'following')
+            )
+        ]
 
     def validate(self, attrs):
-        data = self.initial_data
-        following = data.get('following', None)
-        if not following:
-            raise serializers.ValidationError(
-                '"following" - обязательное поле'
-            )
         user = self.context['request'].user
+        following = self.initial_data['following']
         if following == user.username:
             raise serializers.ValidationError(
                 'Нельзя подписаться на самого себя'
             )
-        if not User.objects.filter(username=following).exists():
-            raise serializers.ValidationError(
-                'Такого автора не существует'
-            )
         following = User.objects.get(username=following)
         return {'following': following}
-
-    def create(self, validated_data):
-        found = Follow.objects.filter(
-            user=self.context['request'].user,
-            following=validated_data['following']
-        )
-        found = found.exists()
-        if found:
-            raise serializers.ValidationError(
-                'Вы уже подписаны на данного автора')
-
-        follow = Follow.objects.create(**validated_data)
-        return follow
