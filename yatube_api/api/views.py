@@ -42,7 +42,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.save(author=self.request.user, post=post)
 
 
-class FollowView(generics.ListCreateAPIView):
+class FollowViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
     serializer_class = FollowSerializer
     permission_classes = (IsAuthenticated,)
 
